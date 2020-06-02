@@ -3,10 +3,10 @@
 #include <GL/glew.h>
 
 const GLfloat frontVertices[] = {
-    -0.5f, -0.5f, -0.5f,
     -0.5f, +0.5f, -0.5f,
-    +0.5f, +0.5f, -0.5f,
+    -0.5f, -0.5f, -0.5f,
     +0.5f, -0.5f, -0.5f,
+    +0.5f, +0.5f, -0.5f,
 };
 
 const GLfloat backVertices[] = {
@@ -17,10 +17,10 @@ const GLfloat backVertices[] = {
 };
 
 const GLfloat topVertices[] = {
-    -0.5f, +0.5f, -0.5f,
     -0.5f, +0.5f, +0.5f,
-    +0.5f, +0.5f, +0.5f,
+    -0.5f, +0.5f, -0.5f,
     +0.5f, +0.5f, -0.5f,
+    +0.5f, +0.5f, +0.5f,
 };
 
 const GLfloat bottomVertices[] = {
@@ -31,10 +31,11 @@ const GLfloat bottomVertices[] = {
 };
 
 const GLfloat rightVertices[] = {
-    +0.5f, -0.5f, -0.5f,
+    
     +0.5f, +0.5f, -0.5f,
-    +0.5f, +0.5f, +0.5f,
+    +0.5f, -0.5f, -0.5f,
     +0.5f, -0.5f, +0.5f,
+    +0.5f, +0.5f, +0.5f,
 };
 
 const GLfloat leftVertices[] = {

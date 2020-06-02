@@ -10,6 +10,8 @@
 #include <iostream>
 #include <ctime>
 #include <random>
+#include <thread>
+#include <mutex>
 
 #include "FastNoise/FastNoise.h"
 #include "Shader.h"
@@ -32,33 +34,51 @@ float lastTime = 0.0f;
 bool keyStates[1024]{ false };
 bool wireView = false;
 
-const int chunkAmountX = 32;
-const int chunkAmountZ = 32;
+const int chunkAmountX = 2048;
+const int chunkAmountZ = 2048;
 
 const int SEED = 325;
+
+FastNoise noise;
+
+std::vector<glm::vec2> pendingMeshes;
+std::vector<glm::vec2> activeChunks;
+
+std::mutex chunkMutex;
 
 void generateChunks()
 {
     double t = glfwGetTime();
-    
-    FastNoise noise;
-    noise.SetSeed(time(NULL));
+    noise.SetSeed(SEED);
     noise.SetNoiseType(FastNoise::Simplex);
 
+    chunks.resize(chunkAmountX);
     for (int x = 0; x < chunkAmountX; x++)
     {
-        std::vector<Chunk> chunkLayer;
+        chunks[x] = std::vector<Chunk>(chunkAmountZ);
         for (int z = 0; z < chunkAmountZ; z++)
         {
-            chunkLayer.emplace_back(Chunk(x * Chunk::chunkSizeX, 0, z * Chunk::chunkSizeZ));
-            const float dX = chunkLayer[z].getChunkCenterX() - camera.getCameraPosition().x;
-            const float dZ = chunkLayer[z].getChunkCenterZ() - camera.getCameraPosition().z;
-            const float distance = sqrt(dX * dX + dZ * dZ);
-            chunkLayer[z].viewable = true;
-            chunkLayer[z].generateChunk(noise);
-            chunkLayer[z].generated = true;
+            chunks[x][z] = Chunk(x * Chunk::chunkSizeX, 0, z * Chunk::chunkSizeZ);
+            const int dX = (chunks[x][z].getChunkCenterX() / Chunk::chunkSizeX - (int)camera.getCameraPosition().x / Chunk::chunkSizeZ);
+            const int dZ = (chunks[x][z].getChunkCenterZ() / Chunk::chunkSizeZ - (int)camera.getCameraPosition().z / Chunk::chunkSizeZ);
+            const double distance = sqrt(dX * dX + dZ * dZ);
+            if (distance <= 12)
+            {
+                chunks[x][z].active = true;
+                activeChunks.push_back(glm::vec2(x, z));
+            }
+            if (distance > 8 && distance <= 12)
+            {
+                chunks[x][z].generateChunk(noise);
+                chunks[x][z].generated = true;
+            }
+            else if (distance <= 8)
+            {
+                chunks[x][z].viewable = true;
+                chunks[x][z].generateChunk(noise);
+                chunks[x][z].generated = true;
+            }
         }
-        chunks.push_back(chunkLayer);
     }
     std::cout << "  Generate Chunks: " << glfwGetTime() - t << std::endl;
 
@@ -67,11 +87,92 @@ void generateChunks()
     {
         for (int z = 0; z < chunkAmountZ; z++)
         {
-            if (chunks[x][z].viewable)
+            if (chunks[x][z].viewable && chunks[x][z].generated && chunks[x][z].active)
+            {
                 chunks[x][z].generateChunkMesh(chunks, x, z);
+                chunks[x][z].sendChunkMeshData();
+            }
+                
         }
     }
     std::cout << "  Generate Chunk Meshes: " << glfwGetTime() - t << std::endl;
+}
+
+void updateChunks()
+{
+    while (!glfwWindowShouldClose(mainWindow))
+    {
+        for (int x = 0; x < chunkAmountX; x++)
+        {
+            for (int z = 0; z < chunkAmountZ; z++)
+            {
+                chunkMutex.lock();
+                const int dX = (chunks[x][z].getChunkCenterX() / Chunk::chunkSizeX - (int)camera.getCameraPosition().x / Chunk::chunkSizeX);
+                const int dZ = (chunks[x][z].getChunkCenterZ() / Chunk::chunkSizeZ - (int)camera.getCameraPosition().z / Chunk::chunkSizeZ);
+                chunkMutex.unlock();
+                const double distance = sqrt(dX * dX + dZ * dZ);
+                
+                if (distance <= 12 && chunks[x][z].active == false)
+                {
+                    std::lock_guard<std::mutex> lock(chunkMutex);
+                    activeChunks.push_back(glm::vec2(x, z));
+                    chunks[x][z].active = true;
+                }
+                if (distance > 8 && distance <= 12 && chunks[x][z].generated == false)
+                {
+                    std::lock_guard<std::mutex> lock(chunkMutex);
+                    chunks[x][z].generateChunk(noise);
+                    chunks[x][z].generated = true;
+                }
+                if (distance <= 8 && chunks[x][z].generated == false)
+                {
+                    std::lock_guard<std::mutex> lock(chunkMutex);
+                    chunks[x][z].generateChunk(noise);
+                    chunks[x][z].generated = true;
+                    chunks[x][z].pending = true;
+                }
+                if (distance <= 8 && chunks[x][z].pending == false)
+                {
+                    chunks[x][z].pending = true;
+                }
+                if (distance > 8 && chunks[x][z].viewable)
+                {
+                    chunks[x][z].viewable = false;
+                }
+                if (distance > 12 && chunks[x][z].active)
+                {
+                    std::lock_guard<std::mutex> lock(chunkMutex);
+                    chunks[x][z].clearChunk();
+                    chunks[x][z].generated = false;
+                    chunks[x][z].active = false;
+
+                    for (int i = 0; i < activeChunks.size(); i++)
+                    {
+                        if (activeChunks[i][0] == x && activeChunks[i][1] == z)
+                        {
+                            activeChunks.erase(activeChunks.begin() + i);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        for (int x = 0; x < chunkAmountX; x++)
+        {
+            for (int z = 0; z < chunkAmountZ; z++)
+            {
+                if (chunks[x][z].pending)
+                {
+                    std::lock_guard<std::mutex> lock(chunkMutex);
+                    pendingMeshes.push_back(glm::vec2(x, z));
+                    chunks[x][z].generateChunkMesh(chunks, x, z);
+                    chunks[x][z].pending = false;
+                }
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
 }
 
 void handleCursorMovement(GLFWwindow* window, double xPos, double yPos)
@@ -158,7 +259,8 @@ int setupWindow()
 
     glViewport(0, 0, bufferWidth, bufferHeight);
     glEnable(GL_DEPTH_TEST);
-
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
 
     glfwSetCursorPosCallback(mainWindow, handleCursorMovement);
     glfwSetKeyCallback(mainWindow, handleKeyboardInput);
@@ -186,62 +288,57 @@ int main()
 
 
     camera = Camera(glm::vec3(chunkAmountX * (Chunk::chunkSizeX / 2), 32.0f, chunkAmountZ * (Chunk::chunkSizeZ / 2)), 
-        glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 90.0f, 0.0f, 20.0f, 0.05f);
+        glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 90.0f, 0.0f, 100.0f, 0.05f);
 
     textureAtlas.loadTexture("Textures/dirt.png", GL_REPEAT, GL_NEAREST_MIPMAP_LINEAR , GL_NEAREST, GL_RGB, GL_RGB);
     generateChunks();
+    
 
     glm::mat4 model(1.0f);
     model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
-    glm::mat4 projection = glm::perspective(45.0f, (GLfloat)bufferWidth / (GLfloat)bufferHeight, 0.1f, 1000.0f);
+    glm::mat4 projection = glm::perspective(45.0f, (GLfloat)bufferWidth / (GLfloat)bufferHeight, 1.0f, 500.0f);
     glUseProgram(shaderProgram.getID());
     textureAtlas.useTexture();
+    std::thread chunkThread(updateChunks);
     while (!glfwWindowShouldClose(mainWindow))
     {
         float currentTime = glfwGetTime();
         float deltaTime = currentTime - lastTime;
         lastTime = currentTime;
-        
-        camera.moveCamera(keyStates, deltaTime);
 
         glfwPollEvents();
         glClearColor(0.2f, 0.2f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        
+        camera.moveCamera(keyStates, deltaTime);
 
-        /*
-        for (std::vector<Chunk>& chunkLayer : chunks)
+        chunkMutex.lock();
+        for (int i=0; i<pendingMeshes.size(); i++)
         {
-            for (Chunk& chunk : chunkLayer)
-            {
-                chunk.viewable = true;
-                float dX = chunk.getChunkCenterX() - camera.getCameraPosition().x;
-                float dZ = chunk.getChunkCenterZ() - camera.getCameraPosition().z;
-                float distance = sqrt(dX * dX + dZ * dZ);
-                if (distance > 22.6 * 8)
-                    chunk.viewable = false;
-            }
+            Chunk* chunk = &chunks[pendingMeshes[i][0]][pendingMeshes[i][1]];
+            chunk->deleteChunkMeshData();
+            chunk->sendChunkMeshData();
+            chunk->viewable = true;
         }
-        */
-        
-        
+        pendingMeshes.clear();
+        chunkMutex.unlock();
+
         // set Model View Projection
         glm::mat4 mvp = projection * camera.calculateViewMatrix() * model;
         glUniformMatrix4fv(uniformMVPLocation, 1, GL_FALSE, glm::value_ptr(mvp));
 
-        
-        for (std::vector<Chunk>& chunkLayer : chunks)
+        chunkMutex.lock();
+        for (glm::vec2& vec : activeChunks)
         {
-            for (Chunk& chunk : chunkLayer)
-            {
-                if (chunk.viewable)
-                    chunk.drawChunk();
-            }
+            if (chunks[vec[0]][vec[1]].viewable)
+                chunks[vec[0]][vec[1]].drawChunk();
         }
+        chunkMutex.unlock();
 
         glfwSwapBuffers(mainWindow);
         
     }
-
+    chunkThread.join();
     glfwTerminate();
     return 0;
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+
 #include <GL/glew.h>
 #include <vector>
 #include <iostream>
@@ -8,9 +9,6 @@
 #include "FastNoise/FastNoise.h"
 #include "data.h"
 
-const int CHUNK_SIZE_X = 16;
-const int CHUNK_SIZE_Y = 16;
-const int CHUNK_SIZE_Z = 16;
 
 enum class ChunkFace
 {
@@ -27,47 +25,47 @@ class Chunk
 public:
 	Chunk() = default;
 	Chunk(int setX, int setY, int setZ) : 
-		chunkXPos(setX), chunkYPos(setY), chunkZPos(setZ),
-		chunkCenterX(setX + chunkSizeX / 2),
-		chunkCenterZ(setZ + chunkSizeZ / 2) {}
+		chunkXPos(setX), chunkYPos(setY), chunkZPos(setZ) {}
+	~Chunk();
 	
 	void generateChunk(FastNoise& noise);
 	void generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunkX, int chunkZ);
+	void sendChunkMeshData();
+	void deleteChunkMeshData();
 	void drawChunk();
+	void clearChunk();
 
 	inline int getChunkXPos() { return chunkXPos; }
 	inline int getChunkYPos() { return chunkYPos; }
 	inline int getChunkZPos() { return chunkZPos; }
 
-	inline int getChunkCenterX() { return chunkCenterX; }
-	inline int getChunkCenterZ() { return chunkCenterZ; }
+	inline int getChunkCenterX() { return chunkXPos + chunkSizeX / 2; }
+	inline int getChunkCenterZ() { return chunkZPos + chunkSizeZ / 2; }
 
 	static const int chunkSizeX = 16;
 	static const int chunkSizeY = 32;
 	static const int chunkSizeZ = 16;
 
-	bool viewable = true;
+	bool viewable = false;
 	bool generated = false;
+	bool active = false;
+	bool pending = false;
+	bool meshGenerated = false;
 
 private:
-	int chunkXPos = 0;
-	int chunkYPos = 0;
-	int chunkZPos = 0;
+	int chunkXPos;
+	int chunkYPos;
+	int chunkZPos;
 
-	int chunkCenterX = 0;
-	int chunkCenterZ = 0;
+	int indicesCounter;
 
-	int indicesCounter = 0;
-
-	GLuint VAO, VBO, texVBO, EBO;
+	GLuint VAO = 0, VBO = 0, texVBO = 0, EBO = 0;
 
 	std::vector<GLfloat> vertices;
 	std::vector<unsigned int> indices;
 	std::vector <std::vector<std::vector<BLOCKS>>> blocks;
-	//BLOCKS*** blocks;
 
 	void addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z);
-	void regenerateChunkMesh();
 };
 
 

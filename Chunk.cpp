@@ -38,6 +38,9 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
 {
     const int chunksAmountX = chunks.size();
     const int chunksAmountZ = chunks[0].size();
+    vertices.clear();
+    indices.clear();
+    indicesCounter = 0;
 
 	for (int x = 0; x < chunkSizeX; x++)
 	{
@@ -61,7 +64,6 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
                             addFace(blocks[x][y][z], ChunkFace::BOTTOM, x + chunkXPos, y + chunkYPos, z + chunkZPos);
                         }
                     }
-                    
 
                     if (topY != chunkSizeY)
                     {
@@ -74,7 +76,7 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
                     {
                         if (chunks[chunkX - 1][chunkZ].generated)
                         {
-                            if (chunks[chunkX - 1][chunkZ].blocks[chunkSizeX - 1][y][z] == BLOCKS::AIR && chunks[chunkX - 1][chunkZ].viewable)
+                            if (chunks[chunkX - 1][chunkZ].blocks[chunkSizeX - 1][y][z] == BLOCKS::AIR)
                             {
                                 addFace(blocks[x][y][z], ChunkFace::LEFT, x + chunkXPos, y + chunkYPos, z + chunkZPos);
                             }
@@ -91,7 +93,7 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
                     {
                         if (chunks[chunkX + 1][chunkZ].generated)
                         {
-                            if (chunks[chunkX + 1][chunkZ].blocks[0][y][z] == BLOCKS::AIR && chunks[chunkX + 1][chunkZ].viewable)
+                            if (chunks[chunkX + 1][chunkZ].blocks[0][y][z] == BLOCKS::AIR)
                             {
                                 addFace(blocks[x][y][z], ChunkFace::RIGHT, x + chunkXPos, y + chunkYPos, z + chunkZPos);
                             }
@@ -106,7 +108,7 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
                     {
                         if (chunks[chunkX][chunkZ - 1].generated)
                         {
-                            if (chunks[chunkX][chunkZ - 1].blocks[x][y][chunkSizeZ - 1] == BLOCKS::AIR && chunks[chunkX][chunkZ - 1].viewable)
+                            if (chunks[chunkX][chunkZ - 1].blocks[x][y][chunkSizeZ - 1] == BLOCKS::AIR)
                             {
                                 addFace(blocks[x][y][z], ChunkFace::FRONT, x + chunkXPos, y + chunkYPos, z + chunkZPos);
                             }
@@ -121,7 +123,7 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
                     {
                         if (chunks[chunkX][chunkZ + 1].generated)
                         {
-                            if (chunks[chunkX][chunkZ + 1].blocks[x][y][0] == BLOCKS::AIR && chunks[chunkX][chunkZ + 1].viewable)
+                            if (chunks[chunkX][chunkZ + 1].blocks[x][y][0] == BLOCKS::AIR)
                             {
                                 addFace(blocks[x][y][z], ChunkFace::BACK, x + chunkXPos, y + chunkYPos, z + chunkZPos);
                             }
@@ -136,8 +138,18 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
 		}
 	}
     vertices.shrink_to_fit();
-    
+}
 
+void Chunk::deleteChunkMeshData()
+{
+    glDeleteBuffers(1, &VBO);
+    glDeleteBuffers(1, &texVBO);
+    glDeleteBuffers(1, &EBO);
+    glDeleteVertexArrays(1, &VAO);
+}
+
+void Chunk::sendChunkMeshData()
+{
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 
@@ -160,27 +172,6 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
     glBindVertexArray(NULL);
 }
 
-void Chunk::regenerateChunkMesh()
-{
-    glBindVertexArray(VAO);
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices[0]) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vertices[0]) * 6, NULL);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(vertices[0]) * 6, (void*)(sizeof(vertices[0]) * 3));
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(vertices[0]) * 6, (void*)(sizeof(vertices[0]) * 5));
-    glBindBuffer(GL_ARRAY_BUFFER, NULL);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices[0]) * indices.size(), indices.data(), GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, NULL);
-
-    glBindVertexArray(NULL);
-}
-
 void Chunk::addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z)
 {
     static int verticesAmount = sizeof(frontVertices) / sizeof(frontVertices[0]);
@@ -191,12 +182,12 @@ void Chunk::addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z)
     if (face == ChunkFace::FRONT)
     {
         selectedFace = frontVertices;
-        ambient = 0.7f;
+        ambient = 0.6f;
     }
     else if (face == ChunkFace::BACK)
     {
         selectedFace = backVertices;
-        ambient = 0.7f;
+        ambient = 0.6f;
     }
     else if (face == ChunkFace::TOP)
     {
@@ -210,12 +201,12 @@ void Chunk::addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z)
     else if (face == ChunkFace::RIGHT)
     {
         selectedFace = rightVertices;
-        ambient = 0.7f;
+        ambient = 0.6f;
     }
     else if (face == ChunkFace::LEFT)
     {
         selectedFace = leftVertices;
-        ambient = 0.7f;
+        ambient = 0.6f;
     }
 
     if (face == ChunkFace::LEFT || face == ChunkFace::RIGHT 
@@ -256,11 +247,11 @@ void Chunk::addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z)
     }
 
     indices.push_back(indicesCounter);
+    indices.push_back(indicesCounter + 2);
     indices.push_back(indicesCounter + 1);
-    indices.push_back(indicesCounter + 2);
     indices.push_back(indicesCounter);
-    indices.push_back(indicesCounter + 2);
     indices.push_back(indicesCounter + 3);
+    indices.push_back(indicesCounter + 2);
     indicesCounter += 4;
 }
 
@@ -273,3 +264,25 @@ void Chunk::drawChunk()
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, NULL);
 }
 
+void Chunk::clearChunk()
+{
+    glDeleteBuffers(1, &VBO);
+    glDeleteBuffers(1, &texVBO);
+    glDeleteBuffers(1, &EBO);
+    glDeleteVertexArrays(1, &VAO);
+
+    VAO = 0, VBO = 0, texVBO = 0, EBO = 0;
+    indicesCounter = 0;
+    viewable = false;
+    generated = false;
+    active = false;
+
+    std::vector<GLfloat>().swap(vertices);
+    std::vector<unsigned int>().swap(indices);
+    std::vector <std::vector<std::vector<BLOCKS>>>().swap(blocks);
+}
+
+Chunk::~Chunk()
+{
+    //clearChunk();
+}
