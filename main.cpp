@@ -20,7 +20,7 @@
 #include "Chunk.h"
 
 // Window dimensions
-const GLint WIDTH = 1920, HEIGHT = 1080;
+const GLint WIDTH = 1366, HEIGHT = 768;
 int bufferWidth, bufferHeight;
 GLFWwindow* mainWindow = nullptr;
 Shader shaderProgram;
@@ -28,29 +28,36 @@ Texture textureAtlas;
 std::vector<std::vector<Chunk>> chunks;
 Camera camera;
 
-GLuint uniformMVPLocation;
+GLuint uniformViewProjectionLocation;
+GLuint uniformModelLocation;
 
 float lastTime = 0.0f;
 bool keyStates[1024]{ false };
 bool wireView = false;
 
-const int chunkAmountX = 2048;
-const int chunkAmountZ = 2048;
+const int chunkAmountX = 1024;
+const int chunkAmountZ = 1024;
+const int renderDistance = 16;
 
 const int SEED = 325;
 
-FastNoise noise;
+FastNoise n1;
+FastNoise n2;
+FastNoise n3;
+FastNoise n4;
 
-std::vector<glm::vec2> pendingMeshes;
 std::vector<glm::vec2> activeChunks;
-
 std::mutex chunkMutex;
+std::mutex cameraMutex;
 
 void generateChunks()
 {
     double t = glfwGetTime();
-    noise.SetSeed(SEED);
-    noise.SetNoiseType(FastNoise::Simplex);
+    n1.SetSeed(SEED);   n2.SetSeed(SEED);   n3.SetSeed(SEED);   n4.SetSeed(SEED);
+    n1.SetNoiseType(FastNoise::Simplex);
+    n2.SetNoiseType(FastNoise::Perlin);
+    n3.SetNoiseType(FastNoise::Simplex);
+    n4.SetNoiseType(FastNoise::Perlin);
 
     chunks.resize(chunkAmountX);
     for (int x = 0; x < chunkAmountX; x++)
@@ -59,118 +66,87 @@ void generateChunks()
         for (int z = 0; z < chunkAmountZ; z++)
         {
             chunks[x][z] = Chunk(x * Chunk::chunkSizeX, 0, z * Chunk::chunkSizeZ);
-            const int dX = (chunks[x][z].getChunkCenterX() / Chunk::chunkSizeX - (int)camera.getCameraPosition().x / Chunk::chunkSizeZ);
-            const int dZ = (chunks[x][z].getChunkCenterZ() / Chunk::chunkSizeZ - (int)camera.getCameraPosition().z / Chunk::chunkSizeZ);
-            const double distance = sqrt(dX * dX + dZ * dZ);
-            if (distance <= 12)
-            {
-                chunks[x][z].active = true;
-                activeChunks.push_back(glm::vec2(x, z));
-            }
-            if (distance > 8 && distance <= 12)
-            {
-                chunks[x][z].generateChunk(noise);
-                chunks[x][z].generated = true;
-            }
-            else if (distance <= 8)
-            {
-                chunks[x][z].viewable = true;
-                chunks[x][z].generateChunk(noise);
-                chunks[x][z].generated = true;
-            }
         }
     }
-    std::cout << "  Generate Chunks: " << glfwGetTime() - t << std::endl;
-
-    t = glfwGetTime();
-    for (int x = 0; x < chunkAmountX; x++)
-    {
-        for (int z = 0; z < chunkAmountZ; z++)
-        {
-            if (chunks[x][z].viewable && chunks[x][z].generated && chunks[x][z].active)
-            {
-                chunks[x][z].generateChunkMesh(chunks, x, z);
-                chunks[x][z].sendChunkMeshData();
-            }
-                
-        }
-    }
-    std::cout << "  Generate Chunk Meshes: " << glfwGetTime() - t << std::endl;
 }
 
 void updateChunks()
 {
     while (!glfwWindowShouldClose(mainWindow))
     {
+        std::vector<glm::vec2> meshesToBuild;
         for (int x = 0; x < chunkAmountX; x++)
         {
             for (int z = 0; z < chunkAmountZ; z++)
             {
-                chunkMutex.lock();
+                cameraMutex.lock();
                 const int dX = (chunks[x][z].getChunkCenterX() / Chunk::chunkSizeX - (int)camera.getCameraPosition().x / Chunk::chunkSizeX);
                 const int dZ = (chunks[x][z].getChunkCenterZ() / Chunk::chunkSizeZ - (int)camera.getCameraPosition().z / Chunk::chunkSizeZ);
-                chunkMutex.unlock();
+                cameraMutex.unlock();
                 const double distance = sqrt(dX * dX + dZ * dZ);
-                
-                if (distance <= 12 && chunks[x][z].active == false)
-                {
-                    std::lock_guard<std::mutex> lock(chunkMutex);
-                    activeChunks.push_back(glm::vec2(x, z));
-                    chunks[x][z].active = true;
-                }
-                if (distance > 8 && distance <= 12 && chunks[x][z].generated == false)
-                {
-                    std::lock_guard<std::mutex> lock(chunkMutex);
-                    chunks[x][z].generateChunk(noise);
-                    chunks[x][z].generated = true;
-                }
-                if (distance <= 8 && chunks[x][z].generated == false)
-                {
-                    std::lock_guard<std::mutex> lock(chunkMutex);
-                    chunks[x][z].generateChunk(noise);
-                    chunks[x][z].generated = true;
-                    chunks[x][z].pending = true;
-                }
-                if (distance <= 8 && chunks[x][z].pending == false)
-                {
-                    chunks[x][z].pending = true;
-                }
-                if (distance > 8 && chunks[x][z].viewable)
-                {
-                    chunks[x][z].viewable = false;
-                }
-                if (distance > 12 && chunks[x][z].active)
-                {
-                    std::lock_guard<std::mutex> lock(chunkMutex);
-                    chunks[x][z].clearChunk();
-                    chunks[x][z].generated = false;
-                    chunks[x][z].active = false;
 
-                    for (int i = 0; i < activeChunks.size(); i++)
+                if (distance <= renderDistance + 4)
+                {
+                    if (chunks[x][z].active == false)
                     {
-                        if (activeChunks[i][0] == x && activeChunks[i][1] == z)
-                        {
-                            activeChunks.erase(activeChunks.begin() + i);
-                            break;
-                        }
+                        std::lock_guard<std::mutex> lock(chunkMutex);
+                        activeChunks.push_back(glm::vec2(x, z));
+                        chunks[x][z].active = true;
+                    }
+
+                    if (chunks[x][z].generated == false)
+                    {
+                        chunks[x][z].generateChunk(n1, n2, n3, n4);
+                        chunks[x][z].generated = true;
+                    }
+
+                    if (distance <= renderDistance && !chunks[x][z].viewable)
+                    {
+                        chunks[x][z].viewable = true;
+                        meshesToBuild.push_back(glm::vec2(x, z));
+                    }
+                    else if (distance > renderDistance && chunks[x][z].viewable)
+                    {
+                        std::lock_guard<std::mutex> lock(chunkMutex);
+                        chunks[x][z].viewable = false;
+                        glfwMakeContextCurrent(mainWindow);
+                        chunks[x][z].deleteChunkMeshData();
+                        glfwMakeContextCurrent(NULL);
                     }
                 }
-            }
-        }
-
-        for (int x = 0; x < chunkAmountX; x++)
-        {
-            for (int z = 0; z < chunkAmountZ; z++)
-            {
-                if (chunks[x][z].pending)
+                else if (distance > renderDistance + 4)
                 {
-                    std::lock_guard<std::mutex> lock(chunkMutex);
-                    pendingMeshes.push_back(glm::vec2(x, z));
-                    chunks[x][z].generateChunkMesh(chunks, x, z);
-                    chunks[x][z].pending = false;
-                }
+                    if (chunks[x][z].active)
+                    {
+                        std::lock_guard<std::mutex> lock(chunkMutex);
+                        chunks[x][z].deleteChunkMeshData();
+                        chunks[x][z].clearChunk();
+
+                        for (int i = 0; i < activeChunks.size(); i++)
+                        {
+                            if (activeChunks[i][0] == x && activeChunks[i][1] == z)
+                            {
+                                activeChunks.erase(activeChunks.begin() + i);
+                                break;
+                            }
+                        }
+                    }
+                }   
             }
         }
+        
+        // Build meshes
+        for (glm::vec2& vec : meshesToBuild)
+        {
+            int x = vec[0]; int z = vec[1];
+            chunkMutex.lock();
+            glfwMakeContextCurrent(mainWindow);
+            chunks[x][z].generateChunkMesh(chunks, x, z);
+            chunks[x][z].sendChunkMeshData();
+            glfwMakeContextCurrent(NULL);
+            chunkMutex.unlock();
+        }
+        activeChunks.shrink_to_fit();
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
@@ -194,14 +170,26 @@ void handleKeyboardInput(GLFWwindow* window, int key, int scancode, int action, 
         glfwSetWindowShouldClose(mainWindow, true);
     else if (action == GLFW_PRESS && key == GLFW_KEY_LEFT_ALT && !wireView)
     {
+        std::lock_guard<std::mutex> mtx(chunkMutex);
+        glfwMakeContextCurrent(mainWindow);
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glfwMakeContextCurrent(NULL);
         wireView = true;
     }
         
     else if (action == GLFW_RELEASE && key == GLFW_KEY_LEFT_ALT && wireView)
     {
+        std::lock_guard<std::mutex> mtx(chunkMutex);
+        glfwMakeContextCurrent(mainWindow);
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        glfwMakeContextCurrent(NULL);
         wireView = false;
+    }
+
+    else if (action == GLFW_PRESS && key == GLFW_KEY_BACKSPACE)
+    {
+        float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+        camera.setPosition(r * chunkAmountX * Chunk::chunkSizeX, 32.0f, r * chunkAmountZ * Chunk::chunkSizeZ);
     }
         
     else if (action == GLFW_PRESS)
@@ -231,7 +219,7 @@ int setupWindow()
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
 
-    mainWindow = glfwCreateWindow(WIDTH, HEIGHT, "Test Window", glfwGetPrimaryMonitor(), NULL);
+    mainWindow = glfwCreateWindow(WIDTH, HEIGHT, "Test Window", NULL, NULL);
     if (!mainWindow)
     {
         std::cout << "GLFW window creation failed" << std::endl;
@@ -284,21 +272,20 @@ int main()
     shaderProgram.linkProgram();
 
     // Set uniform locations
-    uniformMVPLocation = glGetUniformLocation(shaderProgram.getID(), "mvp");
-
+    uniformViewProjectionLocation = glGetUniformLocation(shaderProgram.getID(), "viewProjection");
+    uniformModelLocation = glGetUniformLocation(shaderProgram.getID(), "model");
 
     camera = Camera(glm::vec3(chunkAmountX * (Chunk::chunkSizeX / 2), 32.0f, chunkAmountZ * (Chunk::chunkSizeZ / 2)), 
-        glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 90.0f, 0.0f, 100.0f, 0.05f);
+        glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 90.0f, 0.0f, 40.0f, 0.05f);
 
     textureAtlas.loadTexture("Textures/dirt.png", GL_REPEAT, GL_NEAREST_MIPMAP_LINEAR , GL_NEAREST, GL_RGB, GL_RGB);
-    generateChunks();
     
 
-    glm::mat4 model(1.0f);
-    model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
+    
     glm::mat4 projection = glm::perspective(45.0f, (GLfloat)bufferWidth / (GLfloat)bufferHeight, 1.0f, 500.0f);
     glUseProgram(shaderProgram.getID());
     textureAtlas.useTexture();
+    generateChunks();
     std::thread chunkThread(updateChunks);
     while (!glfwWindowShouldClose(mainWindow))
     {
@@ -307,37 +294,37 @@ int main()
         lastTime = currentTime;
 
         glfwPollEvents();
-        glClearColor(0.2f, 0.2f, 1.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        
+        cameraMutex.lock();
         camera.moveCamera(keyStates, deltaTime);
-
-        chunkMutex.lock();
-        for (int i=0; i<pendingMeshes.size(); i++)
-        {
-            Chunk* chunk = &chunks[pendingMeshes[i][0]][pendingMeshes[i][1]];
-            chunk->deleteChunkMeshData();
-            chunk->sendChunkMeshData();
-            chunk->viewable = true;
-        }
-        pendingMeshes.clear();
-        chunkMutex.unlock();
+        cameraMutex.unlock();
 
         // set Model View Projection
-        glm::mat4 mvp = projection * camera.calculateViewMatrix() * model;
-        glUniformMatrix4fv(uniformMVPLocation, 1, GL_FALSE, glm::value_ptr(mvp));
+        glm::mat4 vp = projection * camera.calculateViewMatrix();
 
         chunkMutex.lock();
+        
+        glfwMakeContextCurrent(mainWindow);
+        glClearColor(0.2f, 0.2f, 1.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glUniformMatrix4fv(uniformViewProjectionLocation, 1, GL_FALSE, glm::value_ptr(vp));
         for (glm::vec2& vec : activeChunks)
         {
-            if (chunks[vec[0]][vec[1]].viewable)
-                chunks[vec[0]][vec[1]].drawChunk();
+            Chunk* chunk = &chunks[vec[0]][vec[1]];
+            if (chunk->viewable)
+            {
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, glm::vec3(chunk->getChunkXPos(), chunk->getChunkYPos(), chunk->getChunkZPos()));
+                glUniformMatrix4fv(uniformModelLocation, 1, GL_FALSE, glm::value_ptr(model));
+                chunk->drawChunk();
+            }
         }
-        chunkMutex.unlock();
-
         glfwSwapBuffers(mainWindow);
+        glfwMakeContextCurrent(NULL);
+        
+        chunkMutex.unlock();
         
     }
+    glUseProgram(NULL);
     chunkThread.join();
     glfwTerminate();
     return 0;

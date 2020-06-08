@@ -2,74 +2,82 @@
 
 #include <GL/glew.h>
 
-const GLfloat frontVertices[] = {
-    -0.5f, +0.5f, -0.5f,
-    -0.5f, -0.5f, -0.5f,
-    +0.5f, -0.5f, -0.5f,
-    +0.5f, +0.5f, -0.5f,
+const GLubyte frontVertices[] = {
+    0, 0, 0,
+    0, 1, 0,
+    1, 1, 0,
+    1, 0, 0,
 };
 
-const GLfloat backVertices[] = {
-    -0.5f, -0.5f, +0.5f,
-    -0.5f, +0.5f, +0.5f,
-    +0.5f, +0.5f, +0.5f,
-    +0.5f, -0.5f, +0.5f,
+const GLubyte backVertices[] = {
+    0, 0, 1,
+    0, 1, 1,
+    1, 1, 1,
+    1, 0, 1,
 };
 
-const GLfloat topVertices[] = {
-    -0.5f, +0.5f, +0.5f,
-    -0.5f, +0.5f, -0.5f,
-    +0.5f, +0.5f, -0.5f,
-    +0.5f, +0.5f, +0.5f,
+const GLubyte topVertices[] = {
+    0, 1, 1,
+    0, 1, 0,
+    1, 1, 0,
+    1, 1, 1,
 };
 
-const GLfloat bottomVertices[] = {
-    -0.5f, -0.5f, -0.5f,
-    -0.5f, -0.5f, +0.5f,
-    +0.5f, -0.5f, +0.5f,
-    +0.5f, -0.5f, -0.5f,
+const GLubyte bottomVertices[] = {
+    0, 0, 0,
+    0, 0, 1,
+    1, 0, 1,
+    1, 0, 0,
 };
 
-const GLfloat rightVertices[] = {
-    
-    +0.5f, +0.5f, -0.5f,
-    +0.5f, -0.5f, -0.5f,
-    +0.5f, -0.5f, +0.5f,
-    +0.5f, +0.5f, +0.5f,
+const GLubyte rightVertices[] = {
+    1, 0, 0,
+    1, 1, 0,
+    1, 1, 1,
+    1, 0, 1,
 };
 
-const GLfloat leftVertices[] = {
-    -0.5f, -0.5f, -0.5f,
-    -0.5f, +0.5f, -0.5f,
-    -0.5f, +0.5f, +0.5f,
-    -0.5f, -0.5f, +0.5f,
+const GLubyte leftVertices[] = {
+    0, 0, 0,
+    0, 1, 0,
+    0, 1, 1,
+    0, 0, 1,
 };
 
-
-const GLfloat dirtSideTexCoords[] = {
-    0.0f, 0.5f,
-    0.0f, 1.0f,
-    0.5f, 1.0f,
-    0.5f, 0.5f,
+const GLubyte cubeIndices[6][6] =
+{
+    {0, 1, 2,   0, 2, 3}, // Front
+    {0, 2, 1,   0, 3, 2}, // Back
+    {0, 2, 1,   0, 3, 2}, // Top
+    {0, 2, 1,   0, 3, 2}, // Bottom
+    {0, 1, 2,   0, 2, 3}, // Right
+    {0, 2, 1,   0, 3, 2}, // Left
 };
 
-const GLfloat dirtTopTexCoords[] = {
-    0.5f, 0.5f,
-    0.5f, 1.0f,
-    1.0f, 1.0f,
-    1.0f, 0.5f,
+const GLubyte dirtSideTexCoords[] = {
+    0, 1,
+    0, 2,
+    1, 2,
+    1, 1,
 };
 
-const GLfloat dirtBottomTexCoords[] = {
-    0.0f, 0.0f,
-    0.0f, 0.5f,
-    0.5f, 0.5f,
-    0.5f, 0.0f,
+const GLubyte dirtTopTexCoords[] = {
+    1, 1,
+    1, 2,
+    2, 2,
+    2, 1,
 };
 
-const GLfloat stoneTexCoords[] = {
-    0.5f, 0.0f,
-    0.5f, 0.5f,
-    1.0f, 0.5f,
-    1.0f, 0.0f,
+const GLubyte dirtBottomTexCoords[] = {
+    0, 0,
+    0, 1,
+    1, 1,
+    1, 0,
+};
+
+const GLubyte stoneTexCoords[] = {
+    1, 0,
+    1, 1,
+    2, 1,
+    2, 0,
 };

@@ -19,6 +19,7 @@ public:
 	void update();
 	void moveCamera(bool* keyStates, float deltaTime);
 	void mouseMovement(float deltaX, float deltaY);
+	void setPosition(float x, float y, float z);
 	
 	inline glm::mat4 calculateViewMatrix() { return glm::lookAt(pos, pos + front, up); }
 	inline glm::vec3 getCameraPosition() { return pos; }

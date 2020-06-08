@@ -1,7 +1,8 @@
 #include "Chunk.h"
 
-void Chunk::generateChunk(FastNoise& noise)
+void Chunk::generateChunk(FastNoise& n1, FastNoise& n2, FastNoise& n3, FastNoise& n4)
 {
+    blocks.clear();     blocks.shrink_to_fit();
     blocks.resize(chunkSizeX);
     for (int x = 0; x < chunkSizeX; x++)
     {
@@ -18,9 +19,14 @@ void Chunk::generateChunk(FastNoise& noise)
     {
         for (int z = 0; z < chunkSizeZ; z++)
         {
-            int height = 8 + (noise.GetNoise(x + chunkXPos, z + chunkZPos) + 1) * 8;
+            double noise1 = (n1.GetNoise(x + chunkXPos, z + chunkZPos) + 1) / 2;
+            double noise2 = (n2.GetNoise(x + chunkXPos, z + chunkZPos) + 1) / 2;
+            int height = 32 + (noise1 * 16) + (noise2 * 16);
             for (int y = 0; y < chunkSizeY; y++)
             {
+                float gen1 = (n3.GetNoise(x + chunkXPos, z + chunkZPos,y) + 1) / 2;
+                float gen2 = (n4.GetNoise(x + chunkXPos, z + chunkZPos, y) + 1) / 2;
+                float gen = gen1 * gen2;
                 if (y > height)
                     blocks[x][y][z] = BLOCKS::AIR;
                 else if (y == height)
@@ -28,6 +34,12 @@ void Chunk::generateChunk(FastNoise& noise)
                 else if (y < height && y > height - 3)
                     blocks[x][y][z] = BLOCKS::DIRT;
                 else
+                    blocks[x][y][z] = BLOCKS::STONE;
+
+                if (gen > 0.5f)
+                    blocks[x][y][z] = BLOCKS::AIR;
+
+                if (y == 0) // Bedrock
                     blocks[x][y][z] = BLOCKS::STONE;
             }
         }
@@ -38,8 +50,6 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
 {
     const int chunksAmountX = chunks.size();
     const int chunksAmountZ = chunks[0].size();
-    vertices.clear();
-    indices.clear();
     indicesCounter = 0;
 
 	for (int x = 0; x < chunkSizeX; x++)
@@ -61,14 +71,14 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
                     {
                         if (blocks[x][bottomY][z] == BLOCKS::AIR)
                         {
-                            addFace(blocks[x][y][z], ChunkFace::BOTTOM, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                            addFace(blocks[x][y][z], ChunkFace::BOTTOM, x, y, z);
                         }
                     }
 
                     if (topY != chunkSizeY)
                     {
                         if (blocks[x][topY][z] == BLOCKS::AIR)
-                            addFace(blocks[x][y][z], ChunkFace::TOP, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                            addFace(blocks[x][y][z], ChunkFace::TOP, x, y, z);
                     }
                         
                     
@@ -78,15 +88,15 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
                         {
                             if (chunks[chunkX - 1][chunkZ].blocks[chunkSizeX - 1][y][z] == BLOCKS::AIR)
                             {
-                                addFace(blocks[x][y][z], ChunkFace::LEFT, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                                addFace(blocks[x][y][z], ChunkFace::LEFT, x, y, z);
                             }
                         }
                     }
                     else if (leftX == -1)
-                        addFace(blocks[x][y][z], ChunkFace::LEFT, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                        addFace(blocks[x][y][z], ChunkFace::LEFT, x, y, z);
                     else if (blocks[leftX][y][z] == BLOCKS::AIR)
                     {
-                        addFace(blocks[x][y][z], ChunkFace::LEFT, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                        addFace(blocks[x][y][z], ChunkFace::LEFT, x, y, z);
                     }
                     
                     if (rightX == chunkSizeX && chunkX != chunksAmountX-1)
@@ -95,14 +105,14 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
                         {
                             if (chunks[chunkX + 1][chunkZ].blocks[0][y][z] == BLOCKS::AIR)
                             {
-                                addFace(blocks[x][y][z], ChunkFace::RIGHT, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                                addFace(blocks[x][y][z], ChunkFace::RIGHT, x, y, z);
                             }
                         }
                     }
                     else if (rightX == chunkSizeX)
-                        addFace(blocks[x][y][z], ChunkFace::RIGHT, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                        addFace(blocks[x][y][z], ChunkFace::RIGHT, x, y, z);
                     else if (blocks[rightX][y][z] == BLOCKS::AIR)
-                        addFace(blocks[x][y][z], ChunkFace::RIGHT, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                        addFace(blocks[x][y][z], ChunkFace::RIGHT, x, y, z);
 
                     if (frontZ == -1 && chunkZ != 0)
                     {
@@ -110,14 +120,14 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
                         {
                             if (chunks[chunkX][chunkZ - 1].blocks[x][y][chunkSizeZ - 1] == BLOCKS::AIR)
                             {
-                                addFace(blocks[x][y][z], ChunkFace::FRONT, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                                addFace(blocks[x][y][z], ChunkFace::FRONT, x, y, z);
                             }
                         }
                     }
                     else if (frontZ == -1)
-                        addFace(blocks[x][y][z], ChunkFace::FRONT, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                        addFace(blocks[x][y][z], ChunkFace::FRONT, x, y, z);
                     else if (blocks[x][y][frontZ] == BLOCKS::AIR)
-                        addFace(blocks[x][y][z], ChunkFace::FRONT, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                        addFace(blocks[x][y][z], ChunkFace::FRONT, x, y, z);
                     
                     if (behindZ == chunkSizeZ && chunkZ != chunksAmountZ-1)
                     {
@@ -125,27 +135,34 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
                         {
                             if (chunks[chunkX][chunkZ + 1].blocks[x][y][0] == BLOCKS::AIR)
                             {
-                                addFace(blocks[x][y][z], ChunkFace::BACK, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                                addFace(blocks[x][y][z], ChunkFace::BACK, x, y, z);
                             }
                         }
                     }
                     else if (behindZ == chunkSizeZ)
-                        addFace(blocks[x][y][z], ChunkFace::BACK, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                        addFace(blocks[x][y][z], ChunkFace::BACK, x, y, z);
                     else if (blocks[x][y][behindZ] == BLOCKS::AIR)
-                        addFace(blocks[x][y][z], ChunkFace::BACK, x + chunkXPos, y + chunkYPos, z + chunkZPos);
+                        addFace(blocks[x][y][z], ChunkFace::BACK, x, y, z);
                 }
 			}
 		}
 	}
     vertices.shrink_to_fit();
+    indices.shrink_to_fit();
 }
 
 void Chunk::deleteChunkMeshData()
 {
-    glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &texVBO);
-    glDeleteBuffers(1, &EBO);
+    glBindVertexArray(NULL);
+    glBindBuffer(GL_ARRAY_BUFFER, NULL);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, NULL);
+    
     glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &VBO);
+    glDeleteBuffers(1, &EBO);
+    
+    vertices.clear();   vertices.shrink_to_fit();
+    indices.clear();    indices.shrink_to_fit();
 }
 
 void Chunk::sendChunkMeshData()
@@ -157,11 +174,11 @@ void Chunk::sendChunkMeshData()
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices[0]) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vertices[0]) * 6, NULL);
+    glVertexAttribPointer(0, 3, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(vertices[0]) * 6, NULL);
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(vertices[0]) * 6, (void*)(sizeof(vertices[0]) * 3));
+    glVertexAttribPointer(1, 2, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(vertices[0]) * 6, (void*)(sizeof(vertices[0]) * 3));
     glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(vertices[0]) * 6, (void*)(sizeof(vertices[0]) * 5));
+    glVertexAttribPointer(2, 1, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(vertices[0]) * 6, (void*)(sizeof(vertices[0]) * 5));
     glBindBuffer(GL_ARRAY_BUFFER, NULL);
 
     glGenBuffers(1, &EBO);
@@ -175,19 +192,19 @@ void Chunk::sendChunkMeshData()
 void Chunk::addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z)
 {
     static int verticesAmount = sizeof(frontVertices) / sizeof(frontVertices[0]);
-    const GLfloat* selectedFace = nullptr;
-    const GLfloat* selectedBlock = nullptr;
-    float ambient = 1.0f;
+    const GLubyte* selectedFace = nullptr;
+    const GLubyte* selectedBlock = nullptr;
+    GLubyte ambient = 10;
 
     if (face == ChunkFace::FRONT)
     {
         selectedFace = frontVertices;
-        ambient = 0.6f;
+        ambient = 6;
     }
     else if (face == ChunkFace::BACK)
     {
         selectedFace = backVertices;
-        ambient = 0.6f;
+        ambient = 6;
     }
     else if (face == ChunkFace::TOP)
     {
@@ -196,17 +213,17 @@ void Chunk::addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z)
     else if (face == ChunkFace::BOTTOM)
     {
         selectedFace = bottomVertices;
-        ambient = 0.5f;
+        ambient = 4;
     }
     else if (face == ChunkFace::RIGHT)
     {
         selectedFace = rightVertices;
-        ambient = 0.6f;
+        ambient = 6;
     }
     else if (face == ChunkFace::LEFT)
     {
         selectedFace = leftVertices;
-        ambient = 0.6f;
+        ambient = 6;
     }
 
     if (face == ChunkFace::LEFT || face == ChunkFace::RIGHT 
@@ -221,7 +238,9 @@ void Chunk::addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z)
     } 
     else if (face == ChunkFace::TOP)
     {
-        if (blockType == BLOCKS::DIRT || blockType == BLOCKS::DIRT_TOP)
+        if (blockType == BLOCKS::DIRT)
+            selectedBlock = dirtBottomTexCoords;
+        else if (blockType == BLOCKS::DIRT_TOP)
             selectedBlock = dirtTopTexCoords;
         else if (blockType == BLOCKS::STONE)
             selectedBlock = stoneTexCoords;
@@ -246,12 +265,11 @@ void Chunk::addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z)
         texCoords += 2;
     }
 
-    indices.push_back(indicesCounter);
-    indices.push_back(indicesCounter + 2);
-    indices.push_back(indicesCounter + 1);
-    indices.push_back(indicesCounter);
-    indices.push_back(indicesCounter + 3);
-    indices.push_back(indicesCounter + 2);
+    
+    for (int i = 0; i < 6; i++)
+    {
+        indices.push_back(indicesCounter + cubeIndices[face][i]);
+    }
     indicesCounter += 4;
 }
 
@@ -266,23 +284,11 @@ void Chunk::drawChunk()
 
 void Chunk::clearChunk()
 {
-    glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &texVBO);
-    glDeleteBuffers(1, &EBO);
-    glDeleteVertexArrays(1, &VAO);
+    blocks.clear();     blocks.shrink_to_fit();
 
-    VAO = 0, VBO = 0, texVBO = 0, EBO = 0;
+    VAO = 0, VBO = 0, EBO = 0;
     indicesCounter = 0;
     viewable = false;
     generated = false;
     active = false;
-
-    std::vector<GLfloat>().swap(vertices);
-    std::vector<unsigned int>().swap(indices);
-    std::vector <std::vector<std::vector<BLOCKS>>>().swap(blocks);
-}
-
-Chunk::~Chunk()
-{
-    //clearChunk();
 }

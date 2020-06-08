@@ -52,3 +52,8 @@ void Camera::mouseMovement(float deltaX, float deltaY)
 
 	update();
 }
+
+void Camera::setPosition(float x, float y, float z)
+{
+	pos = glm::vec3(x, y, z);
+}
