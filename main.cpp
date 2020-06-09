@@ -46,7 +46,7 @@ FastNoise n2;
 FastNoise n3;
 FastNoise n4;
 
-std::vector<glm::vec2> activeChunks;
+std::vector<glm::ivec2> activeChunks;
 std::mutex chunkMutex;
 std::mutex cameraMutex;
 
@@ -74,7 +74,7 @@ void updateChunks()
 {
     while (!glfwWindowShouldClose(mainWindow))
     {
-        std::vector<glm::vec2> meshesToBuild;
+        std::vector<glm::ivec2> meshesToBuild;
         for (int x = 0; x < chunkAmountX; x++)
         {
             for (int z = 0; z < chunkAmountZ; z++)
@@ -90,7 +90,7 @@ void updateChunks()
                     if (chunks[x][z].active == false)
                     {
                         std::lock_guard<std::mutex> lock(chunkMutex);
-                        activeChunks.push_back(glm::vec2(x, z));
+                        activeChunks.push_back(glm::ivec2(x, z));
                         chunks[x][z].active = true;
                     }
 
@@ -103,7 +103,7 @@ void updateChunks()
                     if (distance <= renderDistance && !chunks[x][z].viewable)
                     {
                         chunks[x][z].viewable = true;
-                        meshesToBuild.push_back(glm::vec2(x, z));
+                        meshesToBuild.push_back(glm::ivec2(x, z));
                     }
                     else if (distance > renderDistance && chunks[x][z].viewable)
                     {
@@ -119,8 +119,11 @@ void updateChunks()
                     if (chunks[x][z].active)
                     {
                         std::lock_guard<std::mutex> lock(chunkMutex);
+                        glfwMakeContextCurrent(mainWindow);
                         chunks[x][z].deleteChunkMeshData();
+                        glfwMakeContextCurrent(NULL);
                         chunks[x][z].clearChunk();
+                        
 
                         for (int i = 0; i < activeChunks.size(); i++)
                         {
@@ -136,7 +139,7 @@ void updateChunks()
         }
         
         // Build meshes
-        for (glm::vec2& vec : meshesToBuild)
+        for (glm::ivec2& vec : meshesToBuild)
         {
             int x = vec[0]; int z = vec[1];
             chunkMutex.lock();
@@ -307,7 +310,7 @@ int main()
         glClearColor(0.2f, 0.2f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glUniformMatrix4fv(uniformViewProjectionLocation, 1, GL_FALSE, glm::value_ptr(vp));
-        for (glm::vec2& vec : activeChunks)
+        for (glm::ivec2& vec : activeChunks)
         {
             Chunk* chunk = &chunks[vec[0]][vec[1]];
             if (chunk->viewable)

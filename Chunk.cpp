@@ -24,13 +24,13 @@ void Chunk::generateChunk(FastNoise& n1, FastNoise& n2, FastNoise& n3, FastNoise
             int height = 32 + (noise1 * 16) + (noise2 * 16);
             for (int y = 0; y < chunkSizeY; y++)
             {
-                float gen1 = (n3.GetNoise(x + chunkXPos, z + chunkZPos,y) + 1) / 2;
+                float gen1 = (n3.GetNoise(x + chunkXPos, z + chunkZPos, y) + 1) / 2;
                 float gen2 = (n4.GetNoise(x + chunkXPos, z + chunkZPos, y) + 1) / 2;
                 float gen = gen1 * gen2;
                 if (y > height)
                     blocks[x][y][z] = BLOCKS::AIR;
                 else if (y == height)
-                    blocks[x][y][z] = BLOCKS::DIRT_TOP;
+                    blocks[x][y][z] = BLOCKS::DIRT_TOP; 
                 else if (y < height && y > height - 3)
                     blocks[x][y][z] = BLOCKS::DIRT;
                 else
@@ -41,6 +41,23 @@ void Chunk::generateChunk(FastNoise& n1, FastNoise& n2, FastNoise& n3, FastNoise
 
                 if (y == 0) // Bedrock
                     blocks[x][y][z] = BLOCKS::STONE;
+            }
+        }
+    }
+
+    heightmap.resize(chunkSizeX);
+    for (int x = 0; x < chunkSizeX; x++)
+    {
+        heightmap[x] = std::vector<GLubyte>(chunkSizeZ);
+        for (int z = 0; z < chunkSizeZ; z++)
+        {
+            for (int y = chunkSizeY - 1; y > 0; y--)
+            {
+                if (blocks[x][y][z] != BLOCKS::AIR)
+                {
+                    heightmap[x][z] = y;
+                    break;
+                }
             }
         }
     }
@@ -153,6 +170,7 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
 
 void Chunk::deleteChunkMeshData()
 {
+    if (VAO == 0 || VBO == 0 || EBO == 0) return;
     glBindVertexArray(NULL);
     glBindBuffer(GL_ARRAY_BUFFER, NULL);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, NULL);
@@ -163,6 +181,7 @@ void Chunk::deleteChunkMeshData()
     
     vertices.clear();   vertices.shrink_to_fit();
     indices.clear();    indices.shrink_to_fit();
+    VAO = 0, VBO = 0, EBO = 0;
 }
 
 void Chunk::sendChunkMeshData()
@@ -226,6 +245,10 @@ void Chunk::addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z)
         ambient = 6;
     }
 
+    int lightLevel = heightmap[x][z] - y;
+    if (lightLevel > 15)    lightLevel = 15;
+    ambient = ambient * pow(0.8, lightLevel);
+
     if (face == ChunkFace::LEFT || face == ChunkFace::RIGHT 
         || face == ChunkFace::FRONT || face == ChunkFace::BACK)
     {
@@ -286,7 +309,6 @@ void Chunk::clearChunk()
 {
     blocks.clear();     blocks.shrink_to_fit();
 
-    VAO = 0, VBO = 0, EBO = 0;
     indicesCounter = 0;
     viewable = false;
     generated = false;

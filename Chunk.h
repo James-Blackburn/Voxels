@@ -58,6 +58,7 @@ private:
 
 	GLuint VAO = 0, VBO = 0, EBO = 0;
 
+	std::vector<std::vector<GLubyte>> heightmap;
 	std::vector<GLubyte> vertices;
 	std::vector<GLuint> indices;
 	std::vector <std::vector<std::vector<BLOCKS>>> blocks;
