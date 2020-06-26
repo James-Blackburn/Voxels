@@ -1,6 +1,9 @@
 #include "Chunk.h"
 
-void Chunk::generateChunk(FastNoise& n1, FastNoise& n2, FastNoise& n3, FastNoise& n4)
+#include <glm/glm.hpp>
+#include "ChunkManager.h"
+
+void Chunk::generateChunk()
 {
     blocks.clear();     blocks.shrink_to_fit();
     blocks.resize(chunkSizeX);
@@ -19,14 +22,10 @@ void Chunk::generateChunk(FastNoise& n1, FastNoise& n2, FastNoise& n3, FastNoise
     {
         for (int z = 0; z < chunkSizeZ; z++)
         {
-            double noise1 = (n1.GetNoise(x + chunkXPos, z + chunkZPos) + 1) / 2;
-            double noise2 = (n2.GetNoise(x + chunkXPos, z + chunkZPos) + 1) / 2;
-            int height = 32 + (noise1 * 16) + (noise2 * 16);
+            int height = ChunkManager::heightmap[x + chunkXPos][z + chunkZPos];
             for (int y = 0; y < chunkSizeY; y++)
             {
-                float gen1 = (n3.GetNoise(x + chunkXPos, z + chunkZPos, y) + 1) / 2;
-                float gen2 = (n4.GetNoise(x + chunkXPos, z + chunkZPos, y) + 1) / 2;
-                float gen = gen1 * gen2;
+                float caveSimplexNoise = (ChunkManager::caveSimplex.GetNoise(x + chunkXPos, z + chunkZPos, y) + 1) / 2;
                 if (y > height)
                     blocks[x][y][z] = BLOCKS::AIR;
                 else if (y == height)
@@ -36,28 +35,11 @@ void Chunk::generateChunk(FastNoise& n1, FastNoise& n2, FastNoise& n3, FastNoise
                 else
                     blocks[x][y][z] = BLOCKS::STONE;
 
-                if (gen > 0.5f)
-                    blocks[x][y][z] = BLOCKS::AIR;
+                //if (caveSimplexNoise > 0.7f)
+                   // blocks[x][y][z] = BLOCKS::AIR;
 
                 if (y == 0) // Bedrock
                     blocks[x][y][z] = BLOCKS::STONE;
-            }
-        }
-    }
-
-    heightmap.resize(chunkSizeX);
-    for (int x = 0; x < chunkSizeX; x++)
-    {
-        heightmap[x] = std::vector<GLubyte>(chunkSizeZ);
-        for (int z = 0; z < chunkSizeZ; z++)
-        {
-            for (int y = chunkSizeY - 1; y > 0; y--)
-            {
-                if (blocks[x][y][z] != BLOCKS::AIR)
-                {
-                    heightmap[x][z] = y;
-                    break;
-                }
             }
         }
     }
@@ -168,45 +150,6 @@ void Chunk::generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunk
     indices.shrink_to_fit();
 }
 
-void Chunk::deleteChunkMeshData()
-{
-    if (VAO == 0 || VBO == 0 || EBO == 0) return;
-    glBindVertexArray(NULL);
-    glBindBuffer(GL_ARRAY_BUFFER, NULL);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, NULL);
-    
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
-    
-    vertices.clear();   vertices.shrink_to_fit();
-    indices.clear();    indices.shrink_to_fit();
-    VAO = 0, VBO = 0, EBO = 0;
-}
-
-void Chunk::sendChunkMeshData()
-{
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
-
-    glGenBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices[0]) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(vertices[0]) * 6, NULL);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(vertices[0]) * 6, (void*)(sizeof(vertices[0]) * 3));
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 1, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(vertices[0]) * 6, (void*)(sizeof(vertices[0]) * 5));
-    glBindBuffer(GL_ARRAY_BUFFER, NULL);
-
-    glGenBuffers(1, &EBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices[0]) * indices.size(), indices.data(), GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, NULL);
-
-    glBindVertexArray(NULL);
-}
 
 void Chunk::addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z)
 {
@@ -245,10 +188,6 @@ void Chunk::addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z)
         ambient = 6;
     }
 
-    int lightLevel = heightmap[x][z] - y;
-    if (lightLevel > 15)    lightLevel = 15;
-    ambient = ambient * pow(0.8, lightLevel);
-
     if (face == ChunkFace::LEFT || face == ChunkFace::RIGHT 
         || face == ChunkFace::FRONT || face == ChunkFace::BACK)
     {
@@ -279,16 +218,16 @@ void Chunk::addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z)
     int texCoords = 0;
     for (int i = 0; i < verticesAmount; i += 3)
     {
-        vertices.push_back(selectedFace[i] + x);
-        vertices.push_back(selectedFace[i + 1] + y);
-        vertices.push_back(selectedFace[i + 2] + z);
+        glm::vec3 pos(selectedFace[i], selectedFace[i + 1], selectedFace[i + 2]);
+        vertices.push_back(pos.x + x);
+        vertices.push_back(pos.y + y);
+        vertices.push_back(pos.z + z);
         vertices.push_back(selectedBlock[texCoords]);
         vertices.push_back(selectedBlock[texCoords + 1]);
         vertices.push_back(ambient);
         texCoords += 2;
     }
 
-    
     for (int i = 0; i < 6; i++)
     {
         indices.push_back(indicesCounter + cubeIndices[face][i]);
@@ -304,6 +243,47 @@ void Chunk::drawChunk()
     glBindVertexArray(NULL);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, NULL);
 }
+
+void Chunk::deleteChunkMeshData()
+{
+    if (VAO == 0 || VBO == 0 || EBO == 0) return;
+    glBindVertexArray(NULL);
+    glBindBuffer(GL_ARRAY_BUFFER, NULL);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, NULL);
+
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &VBO);
+    glDeleteBuffers(1, &EBO);
+
+    vertices.clear();   vertices.shrink_to_fit();
+    indices.clear();    indices.shrink_to_fit();
+    VAO = 0, VBO = 0, EBO = 0;
+}
+
+void Chunk::sendChunkMeshData()
+{
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices[0]) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(vertices[0]) * 6, NULL);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(vertices[0]) * 6, (void*)(sizeof(vertices[0]) * 3));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 1, GL_UNSIGNED_BYTE, GL_FALSE, sizeof(vertices[0]) * 6, (void*)(sizeof(vertices[0]) * 5));
+    glBindBuffer(GL_ARRAY_BUFFER, NULL);
+
+    glGenBuffers(1, &EBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices[0]) * indices.size(), indices.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, NULL);
+
+    glBindVertexArray(NULL);
+}
+
 
 void Chunk::clearChunk()
 {

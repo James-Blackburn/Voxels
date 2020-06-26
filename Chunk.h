@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <GL/glew.h>
 #include <vector>
 #include <iostream>
@@ -20,14 +19,25 @@ enum BLOCKS
 	AIR, DIRT, DIRT_TOP, STONE
 };
 
+
+
 class Chunk
 {
 public:
+
+	static const int chunkSizeX = 16;
+	static const int chunkSizeY = 128;
+	static const int chunkSizeZ = 16;
+
+	bool viewable = false;
+	bool generated = false;
+	bool active = false;
+
 	Chunk() = default;
 	Chunk(int setX, int setY, int setZ) : 
 		chunkXPos(setX), chunkYPos(setY), chunkZPos(setZ) {}
 	
-	void generateChunk(FastNoise& n1, FastNoise& n2, FastNoise& n3, FastNoise& n4);
+	void generateChunk();
 	void generateChunkMesh(std::vector<std::vector<Chunk>>& chunks, int chunkX, int chunkZ);
 	void sendChunkMeshData();
 	void deleteChunkMeshData();
@@ -41,15 +51,9 @@ public:
 	inline int getChunkCenterX() { return chunkXPos + chunkSizeX / 2; }
 	inline int getChunkCenterZ() { return chunkZPos + chunkSizeZ / 2; }
 
-	static const int chunkSizeX = 16;
-	static const int chunkSizeY = 64;
-	static const int chunkSizeZ = 16;
-
-	bool viewable = false;
-	bool generated = false;
-	bool active = false;
 
 private:
+
 	int chunkXPos;
 	int chunkYPos;
 	int chunkZPos;
@@ -58,12 +62,10 @@ private:
 
 	GLuint VAO = 0, VBO = 0, EBO = 0;
 
-	std::vector<std::vector<GLubyte>> heightmap;
 	std::vector<GLubyte> vertices;
 	std::vector<GLuint> indices;
 	std::vector <std::vector<std::vector<BLOCKS>>> blocks;
+	
 
 	void addFace(BLOCKS blockType, ChunkFace face, int x, int y, int z);
 };
-
-
